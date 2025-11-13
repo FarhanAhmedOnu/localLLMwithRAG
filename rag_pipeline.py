@@ -10,35 +10,32 @@ import os
 
 def run_rag_pipeline(pdf_path, user_query, ollama_model="llama3"):
     """End-to-end RAG pipeline using a PDF and Ollama model."""
-
-    # Ensure the vector store exists
+    
+    # Ensure the vector store directory exists
     persist_dir = "vector_store"
+    os.makedirs(persist_dir, exist_ok=True)
+
+    # Get collection
     collection = create_or_load_collection(persist_dir)
+    embedding_model = get_embedding_model()
 
-    # Step 1: Check if this PDF was already embedded
-    pdf_name = os.path.basename(pdf_path)
-    existing_docs = collection.count()
-
-    if existing_docs == 0:
-        print(f"🧾 Indexing {pdf_name}...")
-        text = extract_text_from_pdf(pdf_path)
-        chunks = split_text(text)
-        embedding_model = get_embedding_model()
-        populate_vectorstore(collection, chunks, embedding_model)
-    else:
-        print(f"✅ Reusing existing ChromaDB with {existing_docs} documents.")
-        embedding_model = get_embedding_model()
-
-    # Step 2: Retrieve relevant context
+    # Note: PDF processing is now handled by the web UI
+    # The web UI manages adding PDFs to the vector store
+    
+    # Step 1: Retrieve relevant context
     context = retrieve_context(user_query, collection, embedding_model)
 
-    # Step 3: Build prompt (avoid fancy Unicode)
+    if not context.strip():
+        return "I couldn't find relevant information in the documents to answer your question."
+
+    # Step 2: Build prompt
     prompt = (
-        "Answer the question using the context below.\n\n"
+        "Answer the question using the context below. If the context doesn't contain "
+        "relevant information, say so.\n\n"
         f"Context:\n{context}\n\n"
         f"Question: {user_query}\nAnswer:"
     )
 
-    # Step 4: Query Ollama
+    # Step 3: Query Ollama
     answer = query_ollama(ollama_model, prompt)
     return answer
